@@ -1,0 +1,63 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/20
+      EnableDnsHostnames: 'true'
+      EnableDnsSupport: 'true'
+      InstanceTenancy: default
+      Tags:
+        - Key: stack_vpc
+          Value: production
+  Subnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: "us-east-1a"
+      CidrBlock: 10.0.0.0/28
+      Tags:
+        - Key: Subnet_1
+          Value: SB-1
+      VpcId: !Ref VPC
+  Subnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: "us-east-1b"
+      CidrBlock: 10.0.1.0/28
+      Tags:
+        - Key: Subnet_2
+          Value: SB-2
+      VpcId: !Ref VPC
+  Subnet3:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: "us-east-1c"
+      CidrBlock: 10.0.2.0/28
+      Tags:
+           - Value: SB-3
+             Key: Subnet_3
+      VpcId: !Ref VPC
+  Subnet4:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: "us-east-1d"
+      CidrBlock: 10.0.3.0/28
+      Tags:
+           - Value: SB-4
+             Key: Subnet_4
+      VpcId: !Ref VPC
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: This is to give permissions to the certain protocols
+      GroupName: securitygroup1
+      Tags:
+       - Value: secuirty_group
+         Key: sg
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+       - FromPort: '80'
+         ToPort: '80'
+         IpProtocol: tcp
+         CidrIp: 0.0.0.0/0
+  
