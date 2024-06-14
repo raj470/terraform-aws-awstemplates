@@ -1,0 +1,213 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: This template is used to create a ec2 instance with mapping zones auto scaling.
+Mappings:
+  RegionMap:
+    us-east-1:
+      VPC: vpc-05d42dad479891e15
+      ImageId: ami-0a1179631ec8933d7
+      keyname: test_ec2
+      Securitygroup: sg-096e76d2c6315fbaf
+      subnets1: subnet-01ed866330e76671e
+      subnets2: subnet-04287cde12f035e08
+      AZ1: us-east-1a
+      AZ2: us-east-1b
+      InstanceType: t2.micro 
+      Bucketname: tempcft123
+    us-west-1:
+      VPC: vpc-0ac792ea60bb1d83e
+      ImageId: ami-031a87d6fc2457605
+      keyname: west_ec2
+      Securitygroup: sg-01996fadae5cb69d5
+      subnets1: subnet-065e33852b4034156
+      subnets2: subnet-098da992d6ea053fb
+      AZ1: us-west-1a
+      AZ2: us-west-1b
+      InstanceType: t2.micro
+      Bucketname: westcft321 
+Resources:
+  Raj:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !FindInMap [RegionMap, !Ref "AWS::Region",ImageId]
+      InstanceType: !FindInMap [RegionMap, !Ref "AWS::Region",InstanceType]
+      KeyName: !FindInMap [RegionMap, !Ref "AWS::Region",keyname]
+      SecurityGroupIds: 
+        - !FindInMap [RegionMap, !Ref "AWS::Region",Securitygroup]
+      UserData: 
+        Fn::Base64: |
+          #!/bin/bash
+          #sudo su
+          yum install httpd -y
+          systemctl status httpd
+          systemctl start httpd
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      IpAddressType: "ipv4"
+      Scheme: internet-facing
+      SecurityGroups:
+        - !FindInMap [RegionMap, !Ref "AWS::Region",Securitygroup]
+      Subnets:
+        - !FindInMap [RegionMap, !Ref "AWS::Region",subnets1]
+        - !FindInMap [RegionMap, !Ref "AWS::Region",subnets2]
+      Type: "network"
+  MyTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckEnabled: "true"
+      HealthCheckIntervalSeconds: 30
+      HealthCheckPort: "80"
+      HealthCheckProtocol: "TCP"
+      HealthCheckTimeoutSeconds: 30
+      HealthyThresholdCount: 3
+      IpAddressType: "ipv4"
+      Protocol: "TCP"
+      Port: 80
+      TargetType: "instance"
+      UnhealthyThresholdCount: 4
+      VpcId: !FindInMap [RegionMap, !Ref "AWS::Region",VPC]
+      Targets:
+        - Id: !Ref Raj
+  Listener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref MyTargetGroup
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 80
+      Protocol: "TCP"
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AvailabilityZones:
+        - !FindInMap [RegionMap, !Ref "AWS::Region",AZ1]
+        - !FindInMap [RegionMap, !Ref "AWS::Region",AZ2]
+      CapacityRebalance: true
+      DesiredCapacity: "2"
+      DesiredCapacityType: "units"
+      HealthCheckGracePeriod: 200
+      LaunchConfigurationName: !Ref LaunchConfiguration
+      MaxInstanceLifetime: 87000
+      MaxSize: "6"
+      MinSize: "2"
+      TargetGroupARNs:
+        - !Ref MyTargetGroup
+  LaunchConfiguration:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      ImageId: !FindInMap [RegionMap, !Ref "AWS::Region",ImageId]
+      InstanceType: !FindInMap [RegionMap, !Ref "AWS::Region",InstanceType]
+      KeyName: !FindInMap [RegionMap, !Ref "AWS::Region",keyname]
+      SecurityGroups: 
+        - !FindInMap [RegionMap, !Ref "AWS::Region",Securitygroup]
+      IamInstanceProfile: 
+        Ref: ListS3BucketsInstanceProfile
+      
+      UserData: 
+        Fn::Base64: !Sub  |
+          #!/bin/bash
+          #sudo su
+          yum install httpd -y
+          aws s3 cp s3://${Lists3bkt}/index.html /var/www/html/index.html
+          systemctl status httpd
+          systemctl start httpd
+  ListS3BucketsInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: "/"
+      Roles:
+      - Ref: ListS3BucketsRole
+  ListS3BucketsPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: ListS3BucketsPolicy
+      PolicyDocument:
+        Statement:
+        - Effect: Allow
+          Action:
+          - s3:ListObject
+          - s3:GetObject
+          - ecs:*
+          Resource: '*' #"arn:aws:s3:::${BucketName}/*"
+      Roles:
+      - Ref: ListS3BucketsRole
+  Lists3bkt:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !FindInMap [RegionMap, !Ref "AWS::Region",Bucketname]
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+  ListS3BucketsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: 
+              - ec2.amazonaws.com 
+              - ecs.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: "/"
+  # ECSCluster:
+  #   Type: AWS::ECS::Cluster
+  #   Properties:
+  #     ClusterName: "Cluster"
+  #     ClusterSettings:
+  #       - Name: containerInsights
+  #         Value: enabled
+  #     #LaunchType: EC2
+  # TaskDefinition:
+  #   Type: AWS::ECS::TaskDefinition
+  #   Properties:
+  #     Family: ECS_task
+  #     RequiresCompatibilities:
+  #       - "EC2"
+  #     ContainerDefinitions:
+  #       - Image: rockylinux/rockylinux:latest
+  #         Name: Apache
+  #         Memory: 10
+  #         Command:
+  #              - "sleep"
+  #              - "30"
+  #         Essential: true
+  #         PortMappings:
+  #           - ContainerPort: 80
+  #             Protocol: "TCP"
+  #             HostPort: 80
+  # ECSService:
+  #   Type: AWS::ECS::Service
+  #   DependsOn:
+  #     - "Listener"
+  #   Properties:
+  #     Cluster: !Ref ECSCluster
+  #     DeploymentConfiguration:
+  #       DeploymentCircuitBreaker:
+  #         Enable: true
+  #         Rollback: true
+  #       MaximumPercent: 200
+  #       MinimumHealthyPercent: 50
+  #     DeploymentController:
+  #       Type: ECS
+  #     DesiredCount: 5
+  #     HealthCheckGracePeriodSeconds: 60
+  #     LaunchType: EC2
+  #     LoadBalancers:
+  #       - ContainerName: Apache
+  #         ContainerPort: 80
+  #         # LoadBalancerName: !Ref LoadBalancer
+  #         TargetGroupArn: !Ref MyTargetGroup
+  #     # PlacementStrategies:
+  #     #   - Field: instanceId
+  #     #     Type: binpack
+  #     ServiceName: ClusterService
+  #     TaskDefinition: !Ref TaskDefinition
+      
+
+

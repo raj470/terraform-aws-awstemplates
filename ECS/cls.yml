@@ -1,0 +1,243 @@
+AWSTemplateFormatVersion: 2010-09-09
+Mappings:
+  RegionMap:
+    us-east-1:
+      VPC: vpc-05d42dad479891e15
+      ImageId: ami-0d28ec7fa075954c9
+      keyname: my-private-key-r
+      Securitygroup: sg-02b81fa009f7e2116
+      subnets1: subnet-01ed866330e76671e
+      subnets2: subnet-04287cde12f035e08
+      AZ1: us-east-1a
+      AZ2: us-east-1b
+      AZ3: us-east-1c
+      InstanceType: t2.micro
+    us-west-1:
+      VPC: vpc-0ac792ea60bb1d83e
+      ImageId: ami-031a87d6fc2457605
+      keyname: west_ec2
+      Securitygroup: sg-01996fadae5cb69d5
+      subnets1: subnet-065e33852b4034156
+      subnets2: subnet-098da992d6ea053fb
+      AZ1: us-west-1a
+      AZ2: us-west-1b
+      AZ3: us-west-1d
+      InstanceType: t2.micro
+Resources:
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: CFNCluster
+  TaskLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /ecs/taskdcfn
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Retain
+  ECSTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      ContainerDefinitions:
+        - Essential: true
+          Image: public.ecr.aws/e0i5p7n6/raj:web
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref TaskLogGroup
+              awslogs-region: us-east-1
+              awslogs-stream-prefix: ecs
+              awslogs-create-group: true
+          Name: ec2-app
+          HealthCheck:
+            Command:
+              - CMD-SHELL
+              - curl -f http://localhost/ || exit 1
+            Interval: 40
+            Retries: 3
+            StartPeriod: 30
+            Timeout: 20
+          PortMappings:
+            - ContainerPort: 80
+              HostPort: 80
+              Protocol: tcp
+      Cpu: 1 vCPU
+      ExecutionRoleArn: arn:aws:iam::058264186519:role/ecsTaskExecutionRole
+      Family: taskq
+      Memory: 0.5 GB
+      NetworkMode: bridge
+      RequiresCompatibilities:
+        - EC2
+      RuntimePlatform:
+        OperatingSystemFamily: LINUX
+        CpuArchitecture: X86_64
+  ECSService:
+    Type: AWS::ECS::Service
+    DependsOn:
+      - Listener
+      - AutoScalingGroup
+    Properties:
+      ServiceName: cfn-service
+      Cluster: !Ref ECSCluster
+      DesiredCount: 2
+      LaunchType: EC2
+      SchedulingStrategy: REPLICA
+      LoadBalancers:
+        - ContainerName: ec2-app
+          ContainerPort: 80
+          TargetGroupArn: !Ref MyTargetGroup
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 100
+        DeploymentCircuitBreaker:
+          Enable: true
+          Rollback: true
+      TaskDefinition: !Ref ECSTaskDefinition
+  CapacityProvider:
+    Type: AWS::ECS::CapacityProvider
+    Properties:
+      AutoScalingGroupProvider:
+        AutoScalingGroupArn: !Ref AutoScalingGroup
+        ManagedDraining: ENABLED
+        ManagedScaling:
+          InstanceWarmupPeriod: 80
+          MaximumScalingStepSize: 100
+          MinimumScalingStepSize: 3
+          Status: ENABLED
+          TargetCapacity: 60
+        #ManagedTerminationProtection: ENABLED
+      Name: ClusterCapacityProvider
+      Tags:
+        - Key: Cluster
+          Value: true
+  CapacityProviderAssociation:
+    Type: AWS::ECS::ClusterCapacityProviderAssociations
+    Properties:
+      CapacityProviders:
+        - !Ref CapacityProvider
+      Cluster: !Ref ECSCluster
+      DefaultCapacityProviderStrategy:
+        - CapacityProvider: !Ref CapacityProvider
+          Weight: 1
+          Base: 0
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    DependsOn:
+      - EC2Role
+      - ECSCluster
+    Properties:
+      AvailabilityZones:
+        - !FindInMap
+          - RegionMap
+          - !Ref AWS::Region
+          - AZ1
+        - !FindInMap
+          - RegionMap
+          - !Ref AWS::Region
+          - AZ2
+        - !FindInMap
+          - RegionMap
+          - !Ref AWS::Region
+          - AZ3
+      DesiredCapacity: '4'
+      DesiredCapacityType: units
+      HealthCheckGracePeriod: 60
+      HealthCheckType: EC2
+      InstanceMaintenancePolicy:
+        MaxHealthyPercentage: 200
+        MinHealthyPercentage: 100
+      LaunchConfigurationName: !Ref ContainerInstance
+      MaxInstanceLifetime: 87000
+      MaxSize: 8
+      MinSize: 2
+      TargetGroupARNs:
+        - !Ref MyTargetGroup
+      TerminationPolicies:
+        - OldestLaunchConfiguration
+    DeletionPolicy: Delete
+  ContainerInstance:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      ImageId: !FindInMap
+        - RegionMap
+        - !Ref AWS::Region
+        - ImageId
+      InstanceType: !FindInMap
+        - RegionMap
+        - !Ref AWS::Region
+        - InstanceType
+      KeyName: !FindInMap
+        - RegionMap
+        - !Ref AWS::Region
+        - keyname
+      SecurityGroups:
+        - !FindInMap
+          - RegionMap
+          - !Ref AWS::Region
+          - Securitygroup
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      UserData: 
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          echo ECS_CLUSTER=${ECSCluster} >> /etc/ecs/ecs.config
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      IpAddressType: ipv4
+      Scheme: internet-facing
+      SecurityGroups:
+        - !FindInMap
+          - RegionMap
+          - !Ref AWS::Region
+          - Securitygroup
+      Subnets:
+        - subnet-04287cde12f035e08
+        - subnet-01ed866330e76671e
+        - subnet-04df54f17d3907e9b
+      Type: network
+  MyTargetGroup:
+    DependsOn:
+      - LoadBalancer
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckEnabled: 'true'
+      HealthCheckIntervalSeconds: 60
+      HealthCheckPort: traffic-port
+      HealthCheckProtocol: TCP
+      HealthCheckTimeoutSeconds: 50
+      HealthyThresholdCount: 3
+      IpAddressType: ipv4
+      Protocol: TCP
+      Port: 80
+      TargetType: instance
+      UnhealthyThresholdCount: 4
+      VpcId: vpc-05d42dad479891e15
+  Listener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref MyTargetGroup
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 80
+      Protocol: TCP
+  EC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+                - ecs-tasks.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: /
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: /
+      Roles:
+        - !Ref EC2Role
