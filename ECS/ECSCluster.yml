@@ -1,0 +1,154 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: This template is used to create a ECS custer with mapping zones auto scaling of launch type EC2.
+Mappings:
+  RegionMap:
+    us-east-1:
+      VPC: vpc-05d42dad479891e15
+      ImageId: ami-0a1179631ec8933d7
+      keyname: test_ec2
+      Securitygroup: sg-096e76d2c6315fbaf
+      subnets1: subnet-01ed866330e76671e
+      subnets2: subnet-04287cde12f035e08
+      AZ1: us-east-1a
+      AZ2: us-east-1b
+      AZ3: us-east-1c
+      InstanceType: t2.micro 
+    us-west-1:
+      VPC: vpc-0ac792ea60bb1d83e
+      ImageId: ami-031a87d6fc2457605
+      keyname: west_ec2
+      Securitygroup: sg-01996fadae5cb69d5
+      subnets1: subnet-065e33852b4034156
+      subnets2: subnet-098da992d6ea053fb
+      AZ1: us-west-1a
+      AZ2: us-west-1b
+      AZ3: us-west-1c
+      InstanceType: t2.micro 
+Conditions:
+  Bucket: !Equals [!Ref AWS::Region, "us-east-1"]
+  RoleName: !Equals [!Ref AWS::Region, "us-west-1"]
+  Role: !Equals [!Ref AWS::Region, "us-west-1"]
+  LaunchConfigName: !Equals [!Ref AWS::Region, "us-east-1"]
+Resources:
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AvailabilityZones:
+        - !FindInMap [RegionMap, !Ref "AWS::Region",AZ1]
+        - !FindInMap [RegionMap, !Ref "AWS::Region",AZ2]
+        - !FindInMap [RegionMap, !Ref "AWS::Region",AZ3]
+      Context: forcluster
+      DesiredCapacity: "3"
+      DesiredCapacityType: units
+      HealthCheckGracePeriod: 60
+      HealthCheckType: EC2
+      InstanceMaintenancePolicy:
+        MaxHealthyPercentage: 6
+        MinHealthyPercentage: 3
+      LaunchConfigurationName: !Ref LaunchConfig
+      LifecycleHookSpecificationList:
+        - LifecycleHookName: Serverdeploy
+          LifecycleTransition: autoscaling:EC2_INSTANCE_LAUNCHING
+          DefaultResult: ABANDON
+          HeartbeatTimeout: 60
+      MaxInstanceLifetime: 500
+      MaxSize: 10
+      MinSize: 3
+      MetricsCollection:
+        - Granularity: 1
+      TargetGroupARNs:
+           - !Ref MyTargetGroup
+      TerminationPolicies:
+        - "OldestLaunchConfiguration"
+  LaunchConfig:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      ImageId: !FindInMap [RegionMap, !Ref "AWS::Region",ImageId]
+      InstanceType: !FindInMap [RegionMap, !Ref "AWS::Region",InstanceType]
+      KeyName: !FindInMap [RegionMap, !Ref "AWS::Region",keyname]
+      SecurityGroups: 
+        - !FindInMap [RegionMap, !Ref "AWS::Region",Securitygroup]
+      BlockDeviceMappings:
+        - DeviceName: Ebs
+          Ebs:
+            DeleteOnTermination: true
+            VolumeSize: 10
+            VolumeType: gp2
+      EbsOptimized: false
+      IamInstanceProfile: 
+      LaunchConfigurationName: !If [LaunchConfigName, "LaunchConfig", "Config2" ]
+      UserData: 
+        Fn::Base64: !Sub  |
+          #!/bin/bash
+          #sudo su
+          yum install httpd -y
+          aws s3 cp s3://${Lists3bkt}/index.html /var/www/html/index.html
+          systemctl status httpd
+          systemctl start httpd
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      IpAddressType: ipv4
+      Scheme: internet-facing
+      SecurityGroups:
+        - !FindInMap [RegionMap, !Ref "AWS::Region",Securitygroup]
+      Subnets:
+        - !FindInMap [RegionMap, !Ref "AWS::Region",subnets1]
+        - !FindInMap [RegionMap, !Ref "AWS::Region",subnets2]
+      Type: "network"
+  MyTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckEnabled: true
+      HealthCheckIntervalSeconds: 30
+      HealthCheckPath: /
+      HealthCheckPort: 80
+      HealthCheckProtocol: "TCP"
+      HealthCheckTimeoutSeconds: 30
+      HealthyThresholdCount: 4
+      IpAddressType: ipv4
+      Port: 80
+      Protocol: "TCP"
+      TargetType: instance
+      UnhealthyThresholdCount: 3
+  LoadBalancerListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref MyTargetGroup
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 80
+      Protocol: "TCP"
+  ECSClusterRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: 
+              - ec2.amazonaws.com 
+              - ecs.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: "/" 
+      Policies:
+        - PolicyName: ECSCluster
+          PolicyDocument:
+            Statement:
+            - Effect: Allow
+              Action:
+              - ecs:*
+              Resource: '*'
+        - PolicyDocument: 
+            Statement:
+            - Effect: Allow
+              Action:
+              - s3:ListObject
+              - s3:GetObject
+              Resource: "*"
+          PolicyName: S3BucketPolicy
+          
+      
