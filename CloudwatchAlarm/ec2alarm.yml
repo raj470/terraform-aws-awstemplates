@@ -1,0 +1,104 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: This template is used to create a ec2 instance.
+Parameters:
+  AMI:
+    Type: AWS::EC2::Image::Id
+    Description: AMI ID is used to create an ec2 instance of corresponding OS.
+    Default: "ami-0a1179631ec8933d7"
+  InstanceType:
+    Type: String
+    Default: t2.micro
+    Description: Selecting an instance type that meets our computing, memory, networking, or storage needs.
+  KeyName:
+    Type: String
+    Default: test_ec2
+    Description: We can use a key pair to securely connect to your instance.
+  SecurityGroups:
+    Type: String
+    Default: sg-096e76d2c6315fbaf
+    Description: Security Group to add to EC2 Instance.
+  # EC2VPC:
+  #   Type: AWS::EC2::VPC::Id
+  #   Default: vpc-05d42dad479891e15
+Resources:
+  Raj:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref AMI
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref KeyName
+      SecurityGroupIds: 
+        - Ref: SecurityGroups
+      #SubnetId: !Ref EC2VPC
+      UserData: 
+        Fn::Base64: |
+          #!/bin/bash
+          #sudo su
+          yum install httpd -y
+          systemctl status httpd
+          systemctl start httpd
+          cd /var/www/html
+          cat << EOL > /var/www/html/index.html
+          <!DOCTYPE html>
+            <html>
+              <head>
+                <title>Apache Web Server</title>
+              </head>
+              <body>
+                <h1>Raj Website 1</h1>
+                <p>This is a amazon linux 2 Machine.</p>
+              </body>
+            </html>
+          EOL
+          cat <<EOL > /var/www/html/run.sh
+          # Update the package repository
+          sudo yum update -y
+
+          # Install the EPEL repository to get access to additional packages
+          sudo amazon-linux-extras install epel -y
+
+          # Install stress tool
+          sudo yum install -y stress
+
+          # Run stress tool to utilize 100% of 2 CPU cores for 300 seconds
+          stress --cpu 2 --timeout 300
+          EOL
+          chmod +100 run.sh
+          ./run.sh
+  CloudWatchAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: true
+      AlarmActions:
+        - !Ref SNSTopic
+      AlarmDescription: "Alarm when EC2 CPU utilization exceeds 50%"
+      AlarmName: EC2Alarm
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Value: !Ref Raj
+          Name: InstanceId
+      # EvaluateLowSampleCountPercentile: evaluate
+      EvaluationPeriods: 1
+      # ExtendedStatistic: 
+      InsufficientDataActions:
+        - !Ref SNSTopic
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Period: 60
+      Statistic: Average
+      Threshold: 50
+  SNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: EC2SNSAlarm
+      # FifoTopic: true
+      # Subscription:
+      #   - Endpoint: email
+      #     Protocol: srajeshwarreddy470@gmail.com
+      TopicName: rajqa
+  SNSSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Endpoint: srajeshwarreddy470@gmail.com
+      Protocol: email
+      TopicArn: !Ref SNSTopic
