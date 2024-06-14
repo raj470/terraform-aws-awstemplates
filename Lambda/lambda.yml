@@ -1,0 +1,27 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Resources:
+  AddTwoNumbersFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: lambda_function.lambda_handler
+      Role: arn:aws:iam::058264186519:role/lambdaexecutionrole
+      Code:
+        ZipFile: |
+          import json
+
+          def lambda_handler(event, context):
+              # Retrieve the input numbers from the event
+              num1 = event['num1']
+              num2 = event['num2']
+              
+              # Add the numbers together
+              result = num1 + num2
+              
+              # Prepare the response
+              response = {
+                  'statusCode': 200,
+                  'body': json.dumps({'result': result})
+              }
+              
+              return response
+      Runtime: python3.8

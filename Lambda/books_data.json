@@ -1,0 +1,28 @@
+{
+    "books": [
+      {
+        "id": 1,
+        "isbn": "0545139708",
+        "title": "Harry Potter and the Deathly Hallows",
+        "author": "J.K. Rowling"
+      },
+      {
+        "id": 2,
+        "isbn": "9781941631102",
+        "title": "Project Management for the Unofficial Project Manager",
+        "author": "Kory Kogon"
+      },
+      {
+        "id": 3,
+        "isbn": "9791162540640",
+        "title": "Atomic Habits",
+        "author": "James Clear"
+      },
+      {
+        "id": 4,
+        "isbn": "9780440414124",
+        "title": "The Watsons Go to Birmingham – 1963",
+        "author": "Christopher Paul Curtis"
+      }
+    ]
+  }

@@ -1,0 +1,85 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Resources:
+  cloudwatchevent:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: "This event is to invoke the lambda for every certain time period"
+      Name: Lambdaevent
+      RoleArn: !GetAtt LambdaFunctionExecutionRole.Arn
+      ScheduleExpression: "rate(2 minutes)"
+      State: ENABLED
+      Targets:
+        - Id: lambdaFunction 
+          Arn: !GetAtt lambdaevent.Arn
+          Input:  |
+            {
+              "number1": 3,
+              "number2": 4
+            }
+  lambdaevent:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        ZipFile: |
+          import json
+          import logging
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+          def lambda_handler(event, context):
+            # Assuming the event contains the numbers to be added
+            number1 = event.get('number1', 0)
+            number2 = event.get('number2', 0)
+            logger.info("First Number is: %s", number1)
+            logger.info("Second Number is: %s", number2)
+            result = number1 + number2 
+            logging.info("Sum of two numbers: %s", result)
+            return {
+              'statusCode': 200,
+              'body': json.dumps({
+              'number1': number1,
+              'number2': number2,
+              'result': result
+                })
+              }
+      Role: !GetAtt LambdaFunctionExecutionRole.Arn
+      Handler: index.lambda_handler
+      LoggingConfig:
+        ApplicationLogLevel: INFO
+        LogFormat: JSON
+        SystemLogLevel: INFO
+      Timeout: 40
+      Runtime: python3.12
+      # PackageType: Zip
+      FunctionName: My_Function4Event
+      Architectures:
+        - x86_64 
+  MyLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Retain
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${lambdaevent}'
+      RetentionInDays: 14
+  Lambdainvoke:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt lambdaevent.Arn
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt cloudwatchevent.Arn
+  LambdaFunctionExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+                - events.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/CloudWatchEventsReadOnlyAccess    
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole

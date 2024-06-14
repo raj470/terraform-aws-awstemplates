@@ -1,0 +1,179 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Resources:
+  Kenisis:
+    Type: AWS::Kinesis::Stream
+    Properties:
+      Name: KenesisStream
+      RetentionPeriodHours: 24
+      ShardCount: 10 
+      StreamEncryption:
+           EncryptionType: KMS
+           KeyId: alias/aws/kinesis
+  Lambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: My_function
+      Code:
+        ZipFile: |
+          import json
+          import base64
+          import logging
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+          def lambda_handler(event, context):
+            total_sum = 0
+    
+            # Function to add two numbers
+            def add_numbers(num1, num2):
+              return num1 + num2
+    
+            # Function to process Kinesis records
+            def process_records(records):
+              nonlocal total_sum
+              for record in records:
+                # Decode the record data from base64
+                data = base64.b64decode(record['kinesis']['data']).decode('utf-8')
+            
+               # Parse the data (assuming the data is in JSON format)
+                message = json.loads(data)
+            
+                # Get the two numbers from the message
+                num1 = message.get('number1', 0)
+                num2 = message.get('number2', 0)
+                logger.info("First Number is: %s", num1)
+                logger.info("Second Number is: %s", num2)
+                #Ensure both numbers are provided
+                if num1 is None or num2 is None:
+                 logger.error("Missing number1 or number2 in the event")
+                 return {
+                   'statusCode': 400,
+                   'body': json.dumps('Please provide two numbers.')
+                 }
+                # Add the numbers
+                result = add_numbers(num1, num2)
+            
+                # Update total sum
+                total_sum += result
+                logger.info("Sum of two numbers: %s", total_sum)
+              # Process records from Kinesis event
+            if 'Records' in event:
+              process_records(event['Records'])
+
+              # Return the total sum
+              return {
+              'statusCode': 200,
+              'body': json.dumps({
+                'total_sum': total_sum
+              })
+            }
+      Role: !GetAtt LambdaFunctionExecutionRole.Arn
+      Architectures:
+        - x86_64
+      Handler: index.lambda_handler
+      Environment:
+        Variables:
+          Kenisis_Stream: !Ref Kenisis
+      LoggingConfig:
+        ApplicationLogLevel: INFO
+        LogFormat: JSON
+        SystemLogLevel: INFO
+      PackageType: Zip
+      # ReservedConcurrentExecutions: 4
+      Runtime: python3.12
+  lambda2:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: My_Function2
+      Architectures:
+        - x86_64
+      Code:
+        S3Bucket: lambdabkt12 
+        S3Key: "lambda_code.zip"
+      Role: !GetAtt LambdaFunctionExecutionRole.Arn
+      Handler: lambda_function.lambda_handler
+      LoggingConfig:
+        ApplicationLogLevel: INFO
+        LogFormat: JSON
+        SystemLogLevel: INFO
+      Timeout: 40
+      Environment:
+        Variables:
+          Kenisis_Stream: !Ref Kenisis
+      Runtime: python3.12
+      PackageType: Zip
+  LambdaQueue:
+    Type: AWS::SQS::Queue
+    UpdateReplacePolicy: Retain
+    DeletionPolicy: Delete
+    Properties:
+      ContentBasedDeduplication: true
+      FifoQueue: true
+      QueueName: lambdaqueue.fifo
+      MaximumMessageSize: 3072
+      ReceiveMessageWaitTimeSeconds: 15
+      MessageRetentionPeriod: 345600
+      VisibilityTimeout: 160
+  lambda3:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        S3Bucket: lambdabkt12 
+        S3Key: "sqs_code.zip"
+      Role: !GetAtt LambdaFunctionExecutionRole.Arn
+      Architectures:
+        - x86_64
+      FunctionName: My_Function3
+      Handler: lambda_function.lambda_handler
+      LoggingConfig:
+        ApplicationLogLevel: INFO
+        LogFormat: JSON
+        SystemLogLevel: INFO
+      PackageType: Zip
+      Runtime: python3.12
+      Timeout: 60
+  SQSLambdaFunctionEventSourceMapping:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties: 
+      BatchSize: 10 
+      Enabled: true
+      EventSourceArn: !GetAtt LambdaQueue.Arn
+      FunctionName: !GetAtt lambda3.Arn
+      # MaximumBatchingWindowInSeconds: 1
+      FunctionResponseTypes:
+        - "ReportBatchItemFailures"
+  
+  S3LambdaFunctionEventSourceMapping:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties: 
+      BatchSize: 100 
+      Enabled: true
+      EventSourceArn: !GetAtt Kenisis.Arn
+      FunctionName: !GetAtt lambda2.Arn
+      MaximumBatchingWindowInSeconds: 30
+      StartingPosition: LATEST 
+  StreamLambdaFunctionEventSourceMapping:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties: 
+      BatchSize: 100 
+      Enabled: true
+      EventSourceArn: !GetAtt Kenisis.Arn
+      FunctionName: !GetAtt Lambda.Arn
+      MaximumBatchingWindowInSeconds: 30
+      StartingPosition: LATEST 
+  LambdaFunctionExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaKinesisExecutionRole
+        - arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaSQSQueueExecutionRole
+        - arn:aws:iam::aws:policy/AmazonKinesisAnalyticsFullAccess
