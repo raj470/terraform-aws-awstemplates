@@ -1,0 +1,73 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: This template is used to create a ec2 instance.
+Parameters:
+  AMI:
+    Type: AWS::EC2::Image::Id
+    Description: AMI ID is used to create an ec2 instance of corresponding OS.
+    Default: "ami-0a1179631ec8933d7"
+  InstanceType:
+    Type: String
+    Default: t2.micro
+    Description: Selecting an instance type that meets our computing, memory, networking, or storage needs.
+  KeyName:
+    Type: String
+    Default: test_ec2
+    Description: We can use a key pair to securely connect to your instance.
+  SecurityGroups:
+    Type: String
+    Default: sg-096e76d2c6315fbaf
+    Description: Security Group to add to EC2 Instance.
+  EC2VPC:
+    Type: AWS::EC2::VPC::Id
+    Default: vpc-05d42dad479891e15
+Resources:
+  Raj:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref AMI
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref KeyName
+      SecurityGroupIds: 
+        - Ref: SecurityGroups
+      #SubnetId: !Ref EC2VPC
+      UserData: 
+        Fn::Base64: |
+          #!/bin/bash
+          #sudo su
+          yum install httpd -y
+          systemctl status httpd
+          systemctl start httpd 
+          systemctl status httpd
+          lsblk
+          df -h
+          file -s /dev/xvda1
+          file -s /dev/xvda
+          sudo file -s /dev/xvdh
+          mkfs -t xfs /dev/xvdh
+          file -s /dev/xvdh
+          sudo mkdir /data
+          sudo mount /dev/xvdh /data
+          sudo cp /etc/fstab /etc/fstab.orig
+          echo '/dev/xvdh /data xfs defaults,nofail 0 2' >> /etc/fstab
+          umount /data
+          mount /data
+          lsblk
+ 
+  EBSVolume:
+    Type: AWS::EC2::Volume
+    Properties:
+      AvailabilityZone: 'us-east-1a'
+      Encrypted: true
+      #Iops: 100
+      #MultiAttachEnabled: true
+      Size: 10
+      VolumeType: gp2
+  
+  attachment:
+    Type: AWS::EC2::VolumeAttachment
+    Properties:
+      VolumeId: !Ref EBSVolume 
+      InstanceId: !Ref Raj
+      Device: /dev/sdh
+
+      
