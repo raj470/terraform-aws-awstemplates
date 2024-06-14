@@ -1,0 +1,227 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Mappings:
+  RegionMap:
+    us-east-1:
+      VPC: vpc-05d42dad479891e15
+      ImageId: ami-0d28ec7fa075954c9
+      keyname: test_ec2
+      Securitygroup: sg-096e76d2c6315fbaf
+      subnets1: subnet-01ed866330e76671e
+      subnets2: subnet-04287cde12f035e08
+      AZ1: us-east-1a
+      AZ2: us-east-1b
+      AZ3: us-east-1c
+      InstanceType: t2.micro 
+    us-west-1:
+      VPC: vpc-0ac792ea60bb1d83e
+      ImageId: ami-031a87d6fc2457605
+      keyname: west_ec2
+      Securitygroup: sg-01996fadae5cb69d5
+      subnets1: subnet-065e33852b4034156
+      subnets2: subnet-098da992d6ea053fb
+      AZ1: us-west-1a
+      AZ2: us-west-1b
+      AZ3: us-west-1d
+      InstanceType: t2.micro 
+Resources:
+  Cluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: NewECSCluster
+      # CapacityProviders:
+      #   - !Ref CapacityProvider
+  CapacityProvider:
+    Type: AWS::ECS::CapacityProvider
+    Properties:
+      AutoScalingGroupProvider:
+        AutoScalingGroupArn: !Ref AutoScalingGroup
+        ManagedDraining: ENABLED
+        ManagedScaling:
+          InstanceWarmupPeriod: 60
+          MaximumScalingStepSize: 100
+          MinimumScalingStepSize: 3
+          Status: ENABLED
+          TargetCapacity: 60
+        ManagedTerminationProtection: ENABLED
+      Name: ClusterCapacityProvider
+      Tags:
+        - Key: Cluster
+          Value: true
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    DependsOn:
+         - LogGroup
+    Properties:
+      ContainerDefinitions:
+        - Image: public.ecr.aws/e0i5p7n6/raj:web
+          Name: sample
+          Memory: 512 
+          HealthCheck:
+            Command:
+              - "CMD-SHELL, curl -f http://localhost/ || exit 1"
+            Interval: 30
+            Retries: 4
+            StartPeriod: 30
+            Timeout: 20
+          PortMappings:
+            - ContainerPort: 80
+              HostPort: 80
+              AppProtocol: http
+              Protocol: tcp
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-region: !Ref AWS::Region
+              awslogs-group: /ecs/ecstask
+              awslogs-stream-prefix: ecs
+              awslogs-create-group: true
+      Cpu: 1 vCPU
+      Memory: 3 GB
+      ExecutionRoleArn: !GetAtt TaskExecutionRole.Arn
+      TaskRoleArn: !Ref EC2Role
+      Family: TaskCFT
+      NetworkMode: bridge
+      RequiresCompatibilities:
+           - EC2
+  CapacityProviderAssociation:
+    Type: AWS::ECS::ClusterCapacityProviderAssociations
+    Properties:
+         CapacityProviders:
+              - !Ref CapacityProvider
+         Cluster: !Ref Cluster
+         DefaultCapacityProviderStrategy:
+              - CapacityProvider: !Ref CapacityProvider
+                Weight: 1
+                Base: 0
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    DependsOn:
+      - EC2Role
+      - Cluster
+    Properties:
+      AvailabilityZones:
+        - !FindInMap [RegionMap, !Ref "AWS::Region",AZ1]
+        - !FindInMap [RegionMap, !Ref "AWS::Region",AZ2]
+        - !FindInMap [RegionMap, !Ref "AWS::Region",AZ3]
+      DesiredCapacity: "3"
+      DesiredCapacityType: units
+      HealthCheckGracePeriod: 60
+      HealthCheckType: EC2
+      InstanceMaintenancePolicy:
+        MaxHealthyPercentage: 150
+        MinHealthyPercentage: 70
+      LaunchConfigurationName: !Ref ContainerInstance
+      MaxInstanceLifetime: 87000
+      NewInstancesProtectedFromScaleIn: true
+      MaxSize: 3
+      MinSize: 1
+      TerminationPolicies:
+        - "OldestLaunchConfiguration"
+    DeletionPolicy: Delete
+  ContainerInstance:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      ImageId: !FindInMap [RegionMap, !Ref "AWS::Region",ImageId]
+      InstanceType: !FindInMap [RegionMap, !Ref "AWS::Region",InstanceType]
+      KeyName: !FindInMap [RegionMap, !Ref "AWS::Region",keyname]
+      SecurityGroups: 
+        - !FindInMap [RegionMap, !Ref "AWS::Region",Securitygroup]
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      UserData: 
+        Fn::Base64:  |-
+              #!/bin/bash
+              echo ECS_CLUSTER=${ClusterName} >> /etc/ecs/ecs.config;
+              ClusterName: !Ref ECSClusterName
+  Services:
+    Type: AWS::ECS::Service
+    Properties:
+      # PlatformVersion: LATEST
+      CapacityProviderStrategy:
+        - CapacityProvider: !Ref CapacityProvider
+          Base: 0
+          Weight: 1
+      Cluster: !Ref Cluster
+      DeploymentController:
+       Type: ECS
+      DeploymentConfiguration:
+        Alarms:
+         AlarmNames:
+          - "CPUUtilization"
+          - "MemoryUtilization"
+         Rollback: true
+         Enable: true
+        DeploymentCircuitBreaker:
+          Enable: true
+          Rollback: true
+        MaximumPercent: 200
+        MinimumHealthyPercent: 100
+      DesiredCount: 1
+      EnableExecuteCommand: true
+      SchedulingStrategy: REPLICA
+      ServiceConnectConfiguration:
+        Enabled: true
+        Namespace: !GetAtt Namespace.Arn
+        LogConfiguration:
+          LogDriver: awslogs
+          Options:
+            awslogs-region: !Ref AWS::Region
+            awslogs-group: !Ref LogGroup
+            awslogs-stream-prefix: ecs
+            awslogs-create-group: true
+      ServiceName: raj
+      TaskDefinition: !Ref TaskDefinition
+  Namespace:
+    Type: AWS::ServiceDiscovery::HttpNamespace
+    Properties:
+      Description: "This is to create a namespace for services"
+      Name: ecscls
+  NamespaceService:
+    Type: AWS::ServiceDiscovery::Service
+    Properties:
+      Description: "This is to create a namespace for services"
+      Name: clstaskservice
+      NamespaceId: !Ref Namespace
+      Type: HTTP
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupClass: STANDARD
+      LogGroupName: ecslogscls
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+  EC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+                - ecs-tasks.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: /
+      ManagedPolicyArns:
+           - arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: /
+      Roles: 
+      - !Ref EC2Role 
+  TaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal: 
+              Service: 
+                - ecs-tasks.amazonaws.com
+            Action: 
+              - sts:AssumeRole
+      Path: /
+      ManagedPolicyArns:
+       - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+  
