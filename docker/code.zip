@@ -1,0 +1,36 @@
+import json
+import logging
+
+# Set up logging
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+def lambda_handler(event, context):
+    # Extract the numbers from the event
+    number1 = event.get('number1')
+    number2 = event.get('number2')
+
+    # Log the numbers
+    logger.info("First Number is: %s", number1)
+    logger.info("Second Number is: %s", number2)
+
+    # Ensure both numbers are provided
+    if number1 is None or number2 is None:
+      logger.error("Missing number1 or number2 in the event")
+      return {
+          'statusCode': 400,
+          'body': json.dumps('Please provide two numbers.')
+      }
+
+    # Add the two numbers
+    result = number1 + number2
+
+    # Log the result
+    logger.info("Sum of two numbers: %s", result)
+
+    # Return the result
+    return {
+      'statusCode': 200,
+      'body': json.dumps({'result': result})
+    }
+
