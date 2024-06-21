@@ -1,0 +1,243 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: This template is used to create a ec2 instance.
+Parameters:
+  InstanceType:
+    Type: String
+    Default: t2.micro
+    Description: Selecting an instance type that meets our computing, memory, networking, or storage needs.
+Mappings:
+  RegionMap:
+    us-east-1:
+      VPC: vpc-05d42dad479891e15
+      ImageId: ami-0a1179631ec8933d7
+      keyname: test_ec2
+      Securitygroup: sg-096e76d2c6315fbaf
+      subnets1: subnet-01ed866330e76671e
+      subnets2: subnet-04287cde12f035e08
+      AZ1: us-east-1a
+      AZ2: us-east-1b 
+    us-west-1:
+      VPC: vpc-0ac792ea60bb1d83e
+      ImageId: ami-031a87d6fc2457605
+      keyname: west_ec2
+      Securitygroup: sg-01996fadae5cb69d5
+      subnets1: subnet-065e33852b4034156
+      subnets2: subnet-098da992d6ea053fb
+      AZ1: us-west-1a
+      AZ2: us-west-1b
+Conditions:
+  LoadBalancerEast: !Equals [ !Ref AWS::Region, "us-east-1" ]
+  LoadBalancerWest: !Equals [ !Ref AWS::Region, "us-west-1" ]
+  TargetGroupEast: !Equals [!Ref AWS::Region, "us-east-1" ]
+  TargetGroupWest: !Equals [!Ref AWS::Region, "us-west-1" ]
+Resources:
+  LoadBalancerEast:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      IpAddressType: "ipv4"
+      Scheme: internet-facing
+      SecurityGroups:
+        - !FindInMap [RegionMap, !Ref "AWS::Region",Securitygroup]
+      Subnets:
+        - !FindInMap [RegionMap, !Ref "AWS::Region",subnets1]
+        - !FindInMap [RegionMap, !Ref "AWS::Region",subnets2]
+      Type: "network"
+  MyTargetGroup1:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckEnabled: "true"
+      HealthCheckIntervalSeconds: 30
+      HealthCheckPort: "80"
+      HealthCheckProtocol: "TCP"
+      HealthCheckTimeoutSeconds: 30
+      HealthyThresholdCount: 3
+      IpAddressType: "ipv4"
+      Protocol: "TCP"
+      Port: 80
+      Name: EastTarrgetGroup
+      TargetType: "instance"
+      UnhealthyThresholdCount: 4
+      VpcId: !FindInMap [RegionMap, !Ref "AWS::Region",VPC]
+      # Targets:
+      #   - Id: !Ref Raj
+  Listener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !If [TargetGroupWest, !Ref MyTargetGroup2, !Ref MyTargetGroup1 ] #!Ref MyTargetGroup
+      LoadBalancerArn: !If [LoadBalancerEast, !Ref LoadBalancerEast, !Ref LoadBalancerwest] #!Ref LoadBalancer
+      Port: 80
+      Protocol: "TCP"
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AvailabilityZones:
+        - !FindInMap [RegionMap, !Ref "AWS::Region",AZ1]
+        - !FindInMap [RegionMap, !Ref "AWS::Region",AZ2]
+      CapacityRebalance: true
+      DesiredCapacity: "2"
+      DesiredCapacityType: "units"
+      HealthCheckGracePeriod: 200
+      LaunchConfigurationName: !Ref LaunchConfiguration
+      MaxInstanceLifetime: 87000
+      MaxSize: "6"
+      MinSize: "2"
+      TargetGroupARNs:
+        - !If [TargetGroupEast, !Ref MyTargetGroup1, !Ref MyTargetGroup2 ] #!Ref MyTargetGroup
+  LaunchConfiguration:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      ImageId: !FindInMap [RegionMap, !Ref "AWS::Region",ImageId]
+      InstanceType: !Ref InstanceType
+      KeyName: !FindInMap [RegionMap, !Ref "AWS::Region",keyname]
+      SecurityGroups: 
+        - !FindInMap [RegionMap, !Ref "AWS::Region",Securitygroup]
+      UserData: 
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          #sudo su
+          yum install httpd -y
+          systemctl status httpd
+          systemctl start httpd
+          cd /var/www/html
+          cat << EOL > /var/www/html/index.html
+          <!DOCTYPE html>
+            <html>
+              <head>
+                <title>Apache Web Server</title>
+              </head>
+              <body>
+                <h1>Raj Website 1</h1>
+                <p>This is a amazon linux 2 Machine ${AWS::Region}.</p>
+              </body>
+            </html>
+          EOL
+  Listener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !If [TargetGroupWest, !Ref MyTargetGroup2, !Ref MyTargetGroup1 ] #!Ref MyTargetGroup
+      LoadBalancerArn: !If [LoadBalancerEast, !Ref LoadBalancerEast, !Ref LoadBalancerwest] #!Ref LoadBalancer
+      Port: 80
+      Protocol: "TCP"
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AvailabilityZones:
+        - !FindInMap [RegionMap, !Ref "AWS::Region",AZ1]
+        - !FindInMap [RegionMap, !Ref "AWS::Region",AZ2]
+      CapacityRebalance: true
+      DesiredCapacity: "2"
+      DesiredCapacityType: "units"
+      HealthCheckGracePeriod: 200
+      LaunchConfigurationName: !Ref LaunchConfiguration
+      MaxInstanceLifetime: 87000
+      MaxSize: "6"
+      MinSize: "2"
+      TargetGroupARNs:
+        - !If [TargetGroupEast, !Ref MyTargetGroup1, !Ref MyTargetGroup2 ] #!Ref MyTargetGroup
+  LaunchConfiguration:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      ImageId: !FindInMap [RegionMap, !Ref "AWS::Region",ImageId]
+      InstanceType: !Ref InstanceType
+      KeyName: !FindInMap [RegionMap, !Ref "AWS::Region",keyname]
+      SecurityGroups: 
+        - !FindInMap [RegionMap, !Ref "AWS::Region",Securitygroup]
+      UserData: 
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          #sudo su
+          yum install httpd -y
+          systemctl status httpd
+          systemctl start httpd
+          cd /var/www/html
+          cat << EOL > /var/www/html/index.html
+          <!DOCTYPE html>
+            <html>
+              <head>
+                <title>Apache Web Server</title>
+              </head>
+              <body>
+                <h1>Raj Website 1</h1>
+                <p>This is a amazon linux 2 Machine ${AWS::Region}.</p>
+              </body>
+            </html>
+          EOL
+  LoadBalancerwest:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      IpAddressType: "ipv4"
+      Scheme: internet-facing
+      SecurityGroups:
+        - !FindInMap [RegionMap, !Ref "AWS::Region",Securitygroup]
+      Subnets:
+        - !FindInMap [RegionMap, !Ref "AWS::Region",subnets1]
+        - !FindInMap [RegionMap, !Ref "AWS::Region",subnets2]
+      Type: "network"
+  MyTargetGroup2:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckEnabled: "true"
+      HealthCheckIntervalSeconds: 30
+      HealthCheckPort: "80"
+      HealthCheckProtocol: "TCP"
+      HealthCheckTimeoutSeconds: 30
+      HealthyThresholdCount: 3
+      IpAddressType: "ipv4"
+      Protocol: "TCP"
+      Port: 80
+      Name: WestTargetGroup
+      TargetType: "instance"
+      UnhealthyThresholdCount: 4
+      VpcId: !FindInMap [RegionMap, !Ref "AWS::Region",VPC]
+  EastRegionRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      Region: us-east-1
+      Name: "testEast.rajtraining.com"
+      Type: A
+      HostedZoneId: Z070390375EBB78HJV18
+      AliasTarget:
+        HostedZoneId: !If [LoadBalancerWest, !GetAtt LoadBalancerwest.CanonicalHostedZoneID, !GetAtt LoadBalancerEast.CanonicalHostedZoneID]
+        DNSName: !If [LoadBalancerEast, !GetAtt LoadBalancerEast.DNSName, !GetAtt LoadBalancerwest.DNSName] #!If [ CreateEastRecord, !GetAtt LoadBalancer.DNSName, !Ref "AWS::NoValue" ]
+      # Weight: 50
+      SetIdentifier: EastRegion
+  WestRegionRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      # HostedZoneName: rajtraining.com
+      Name: "testWest.rajtraining.com"
+      Type: A
+      HostedZoneId: Z070390375EBB78HJV18
+      Region: us-west-1
+      AliasTarget:
+        HostedZoneId: !If [LoadBalancerWest, !GetAtt LoadBalancerwest.CanonicalHostedZoneID, !GetAtt LoadBalancerEast.CanonicalHostedZoneID]
+        DNSName: !If [LoadBalancerEast, !GetAtt LoadBalancerEast.DNSName, !GetAtt LoadBalancerwest.DNSName] #!If [ CreateWestRecord, !GetAtt LoadBalancer.DNSName, !Ref "AWS::NoValue" ]
+      # Weight: 50
+      SetIdentifier: WestRegion
+  Eastroute:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      Name: "eastweb.rajtraining.com"
+      Type: CNAME
+      HostedZoneName: rajtraining.com.
+      
+  # HealthCheckConfig:
+  #   Type: AWS::Route53::HealthCheck
+  #   Properties:
+  #     HealthCheckConfig:
+  #       Type:  TCP
+  #       FullyQualifiedDomainName: !GetAtt LoadBalancer.DNSName
+  #       ResourcePath: /
+  #       RequestInterval: 30
+  #       FailureThreshold: 2
+  #       HealthThreshold: 3
+  #       Port: 80
+  #       Regions:
+  #         - "us-east-1"
+  #         - "us-west-1"
+        
+

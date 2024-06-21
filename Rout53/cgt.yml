@@ -1,0 +1,220 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Parameters:
+  InstanceType:
+    Type: String
+    Default: t2.micro
+    Description: "EC2 instance type"
+Mappings:
+  RegionMap:
+    us-east-1:
+      VPC: vpc-05d42dad479891e15
+      ImageId: ami-0a1179631ec8933d7
+      keyname: test_ec2
+      Securitygroup: sg-096e76d2c6315fbaf
+      subnets1: subnet-01ed866330e76671e
+      subnets2: subnet-04287cde12f035e08
+      AZ1: us-east-1a
+      AZ2: us-east-1b 
+    us-west-1:
+      VPC: vpc-0ac792ea60bb1d83e
+      ImageId: ami-031a87d6fc2457605
+      keyname: west_ec2
+      Securitygroup: sg-01996fadae5cb69d5
+      subnets1: subnet-065e33852b4034156
+      subnets2: subnet-098da992d6ea053fb
+      AZ1: us-west-1a
+      AZ2: us-west-1b
+Resources:
+  MyLaunchConfigurationEast:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      InstanceType: !Ref InstanceType
+      ImageId: ami-0a1179631ec8933d7 
+      AssociatePublicIpAddress: true
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          #sudo su
+          yum install httpd -y
+          systemctl status httpd
+          systemctl start httpd
+          cd /var/www/html
+          cat << EOL > /var/www/html/index.html
+          <!DOCTYPE html>
+            <html>
+              <head>
+                <title>Apache Web Server</title>
+              </head>
+              <body>
+                <h1>Raj Website in us-east-1</h1>
+                <p>This is a amazon linux 2 Machine us-east-1.</p>
+              </body>
+            </html>
+          EOL
+      # SecurityGroups:
+      #   - !Ref InstanceSecurityGroup
+  MyLaunchConfigurationWest:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      InstanceType: !Ref InstanceType
+      ImageId: ami-0a1179631ec8933d7 
+      AssociatePublicIpAddress: true
+      UserData:
+        Fn::Base64:  |
+          #!/bin/bash
+          #sudo su
+          yum install httpd -y
+          systemctl status httpd
+          systemctl start httpd
+          cd /var/www/html
+          cat << EOL > /var/www/html/index.html
+          <!DOCTYPE html>
+            <html>
+              <head>
+                <title>Apache Web Server</title>
+              </head>
+              <body>
+                <h1>Raj Website in us-west-1</h1>
+                <p>This is a amazon linux 2 Machine us-west-1.</p>
+              </body>
+            </html>
+          EOL
+  MyAutoScalingGroupEast:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      LaunchConfigurationName: !Ref MyLaunchConfigurationEast
+      MinSize: 1
+      MaxSize: 2
+      DesiredCapacity: 1
+      VPCZoneIdentifier:
+        - subnet-01ed866330e76671e 
+        - subnet-04287cde12f035e08
+      TargetGroupARNs:
+        - !Ref MyTargetGroupEast
+  MyAutoScalingGroupWest:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      LaunchConfigurationName: !Ref MyLaunchConfigurationWest
+      MinSize: 1
+      MaxSize: 2
+      DesiredCapacity: 1
+      VPCZoneIdentifier:
+        - subnet-0b209586cca0b8e28 
+        - subnet-092683eddfe53fab1
+      TargetGroupARNs:
+        - !Ref MyTargetGroupWest
+  MyNetworkLoadBalancerEast:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: "my-nlb-east"
+      Type: network
+      Subnets:
+        - subnet-01ed866330e76671e 
+        - subnet-04287cde12f035e08
+      Scheme: internet-facing
+  MyNetworkLoadBalancerWest:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: "my-nlb-west"
+      Type: network
+      Subnets:
+        - subnet-0b209586cca0b8e28 
+        - subnet-092683eddfe53fab1
+      Scheme: internet-facing
+  MyTargetGroupEast:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: "my-target-group-east"
+      Port: 80
+      Protocol: TCP
+      VpcId: vpc-05d42dad479891e15 
+      TargetType: instance
+      HealthCheckProtocol: TCP
+      HealthCheckPort: "traffic-port"
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 10
+      HealthyThresholdCount: 3
+      UnhealthyThresholdCount: 3
+  MyTargetGroupWest:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: "my-target-group-west"
+      Port: 80
+      Protocol: TCP
+      VpcId: vpc-0fb30a069e2eadccc 
+      TargetType: instance
+      HealthCheckProtocol: TCP
+      HealthCheckPort: "traffic-port"
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 10
+      HealthyThresholdCount: 3
+      UnhealthyThresholdCount: 3
+  MyListenerEast:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref MyTargetGroupEast
+      LoadBalancerArn: !Ref MyNetworkLoadBalancerEast
+      Port: 80
+      Protocol: TCP
+  MyListenerWest:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref MyTargetGroupWest
+      LoadBalancerArn: !Ref MyNetworkLoadBalancerWest
+      Port: 80
+      Protocol: TCP
+  MyDNSRecordEast:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      #HostedZoneName: "rajtraining.com."
+      HostedZoneId: Z070390375EBB78HJV18
+      Name: "TestEast1.rajtraining.com"
+      Type: A
+      # TTL: 60
+      # SetIdentifier: "EastRegion"
+      # Weight: 50
+      #Region: us-east-1
+      AliasTarget:
+        HostedZoneId: !GetAtt MyNetworkLoadBalancerEast.CanonicalHostedZoneID
+        DNSName: !GetAtt MyNetworkLoadBalancerEast.DNSName
+  MyDNSRecordWest:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      #HostedZoneName: "rajtraining.com."
+      HostedZoneId: Z070390375EBB78HJV18
+      Name: "TestWest1.rajtraining.com"
+      Type: A
+      # TTL: 60
+      #Region: us-west-1
+      # SetIdentifier: "WestRegion"
+      # Weight: 50
+      AliasTarget:
+        HostedZoneId: !GetAtt MyNetworkLoadBalancerWest.CanonicalHostedZoneID
+        DNSName: !GetAtt MyNetworkLoadBalancerWest.DNSName
+  Eastroute:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      Name: "test.rajtraining.com"
+      Type: CNAME
+      HostedZoneName: rajtraining.com.
+      Weight: 128
+      TTL: 60
+      SetIdentifier: "EastRegion"
+      ResourceRecords:
+        - !Ref MyDNSRecordEast
+         # !Ref MyDNSRecordWest
+  Westroute:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      Name: "test.rajtraining.com"
+      Type: CNAME
+      HostedZoneName: rajtraining.com.
+      Weight: 128
+      TTL: 60
+      SetIdentifier: "WestRegion"
+      ResourceRecords:
+        - !Ref MyDNSRecordWest
