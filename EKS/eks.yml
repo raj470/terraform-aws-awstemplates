@@ -70,6 +70,8 @@ Resources:
       NodegroupName: !Ref NodeGroupName
       NodeRole: !GetAtt NodeInstanceRole.Arn
       Subnets: !Ref SubnetIds
+      RemoteAccess:
+        Ec2SshKey: !Ref KeyName
       ScalingConfig:
         DesiredSize: !Ref DesiredCapacity
         MinSize: 1
