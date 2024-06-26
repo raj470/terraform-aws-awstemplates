@@ -2,6 +2,8 @@ AWSTemplateFormatVersion: "2010-09-09"
 Resources:
   Kenisis:
     Type: AWS::Kinesis::Stream
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Retain
     Properties:
       Name: KenesisStream
       RetentionPeriodHours: 24
@@ -177,3 +179,11 @@ Resources:
         - arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess
         - arn:aws:iam::aws:policy/service-role/AWSLambdaSQSQueueExecutionRole
         - arn:aws:iam::aws:policy/AmazonKinesisAnalyticsFullAccess
+
+
+
+        #KinesisPutRecords
+        #aws kinesis put-record  --stream-name KenesisStream --partition-key 7 --data 'eyJudW1iZXIxIjogNSwgIm51bWJlcjIiOiAxMH0=' --region us-east-1
+        #aws kinesis list-shards --stream-name KenesisStream 
+        #SQS message
+        #aws sqs send-message --queue-url https://sqs.us-east-1.amazonaws.com/058264186519/raj.fifo --message-body '{"number1": 4, "number2": 3}' --message-group-id "group-1"
