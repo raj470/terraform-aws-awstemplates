@@ -28,7 +28,7 @@ Parameters:
   DesiredCapacity:
     Type: Number
     Description: Desired number of worker nodes
-    Default: 2
+    Default: 4
     MinValue: 1
     MaxValue: 10
 Resources:
@@ -75,7 +75,7 @@ Resources:
       ScalingConfig:
         DesiredSize: !Ref DesiredCapacity
         MinSize: 1
-        MaxSize: 2
+        MaxSize: 4
       InstanceTypes:
         - !Ref NodeInstanceType
 
