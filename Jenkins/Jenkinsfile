@@ -1,0 +1,49 @@
+pipeline {
+    agent any
+    
+    stages {
+        stage('Hello'){
+            steps {
+                echo "Hello-World"
+            }
+        }
+        stage("Git") {
+            steps {
+                git 'https://github.com/raj470/awstemplates.git'
+            }
+        }
+        stage("Git Execution"){
+            steps {
+                sh "git branch && ls"
+                dir('docker') {
+                 sh "ls "
+                }
+                sh "pwd"
+            }
+        }
+        stage("docker"){
+            steps {
+                sh "docker --version"
+            }
+        }
+        stage("Docker Build"){
+            steps {
+                script {
+                    dir('docker') {
+                        try {
+                            sh 'docker build --platform linux/amd64 -t my-rockylinux-image .'
+                        } catch (Exception e) {
+                            error "Failed to build Docker image: ${e.message}"
+                        }    
+                    }
+                }
+            }
+        }
+        stage("Docker list"){
+            steps {
+                sh "docker ps && docker images"
+            }
+        }
+    }
+    
+}
