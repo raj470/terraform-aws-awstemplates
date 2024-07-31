@@ -1,4 +1,4 @@
-FROM rockylinux/rockylinux:latest
+FROM rockylinux/rockylinux:latest 
  
 # Install apache2 with less
 RUN yum -y update && \
