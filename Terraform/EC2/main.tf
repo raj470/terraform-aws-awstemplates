@@ -1,10 +1,10 @@
 provider "aws" {
   region = "us-east-1"
 }
-module "awstemplates" {
-  source  = "app.terraform.io/raj_aws/awstemplates/aws"
-  version = "1.9.0"
-}
+# module "awstemplates" {
+#   source  = "app.terraform.io/raj_aws/awstemplates/aws"
+#   version = "1.9.0"
+# }
 resource "aws_instance" "terraform" {
   ami = var.ami
   tags = var.tags
