@@ -13,9 +13,9 @@ provider "aws" {
 
 module "temp" {
   source  = "app.terraform.io/raj_aws/temp/aws"
-  version = "0.0.1"
+  version = "0.0.2"
+}
 #   credentials "app.terraform.io" {
 #   # valid user API token
 #   token = "xxxxxx.atlasv1.zzzzzzzzzzzzz"
 # }
-}
