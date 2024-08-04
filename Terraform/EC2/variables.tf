@@ -22,6 +22,10 @@ variable "tags" {
     "Provisioned" = "terraform"
   }
 }
+variable "key_name" {
+  description = "The key name of instance"
+  default = "test_ec2"
+}
 variable "vpc_security_group_ids" {
   description = "VPC Security Groups"
   default = ["sg-096e76d2c6315fbaf"]
