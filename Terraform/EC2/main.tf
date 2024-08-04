@@ -1,4 +1,4 @@
-resource "aws_instance" "teerraform" {
+resource "aws_instance" "terraform" {
   ami = var.ami
   tags = var.tags
   instance_type = var.instance_type
