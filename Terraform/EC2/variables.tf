@@ -24,7 +24,7 @@ variable "tags" {
 }
 variable "vpc_security_group_ids" {
   description = "VPC Security Groups"
-  default = "vpc-05d42dad479891e15"
+  default = ["sg-096e76d2c6315fbaf"]
 }
 variable "availability_zone" {
   description = "Defining availability_zone"
