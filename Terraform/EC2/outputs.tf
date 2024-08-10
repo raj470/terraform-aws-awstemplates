@@ -8,9 +8,9 @@ output "instance_public_ip" {
 }
 output "vpc_security_group_ids" {
   description = "Security group ID"
-  value = aws_instance.terraform.vpc_security_group_ids
+  value       = aws_instance.terraform.vpc_security_group_ids
 }
 output "ami" {
   description = "The ami of instance"
-  value = aws_instance.terraform.ami
+  value       = aws_instance.terraform.ami
 }
