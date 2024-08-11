@@ -1,19 +1,20 @@
 # Terraform Configuration
 terraform {
-   required_providers {
-      aws = {
-        source = "hashicorp/aws"
-        version = ">=5.56.1"
-      }
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = ">=5.56.1"
     }
+  }
 }
 provider "aws" {
-  region = "us-east-1"
+  region                   = "us-east-1"
+  shared_credentials_files = ["/Users/rajeshwarreddysirigada/.aws/credentials"]
 }
 
 module "temp" {
   source  = "app.terraform.io/raj_aws/temp/aws"
-  version = "0.0.2"
+  version = "0.0.3"
 }
 #   credentials "app.terraform.io" {
 #   # valid user API token
