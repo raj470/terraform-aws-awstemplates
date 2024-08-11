@@ -12,7 +12,7 @@ resource "aws_instance" "terraform" {
   user_data              = <<-EOF
     #!/bin/bash
     #sudo su
-    yum install httpd -d
+    yum install httpd -y
     systemctl status httpd
     systemctl start httpd
     cd /var/www/html
