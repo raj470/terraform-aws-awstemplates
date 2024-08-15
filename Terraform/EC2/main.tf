@@ -13,8 +13,8 @@ resource "aws_instance" "terraform" {
     #!/bin/bash
     #sudo su
     yum install httpd -y
-    systemctl status httpd
-    systemctl start httpd
+    sudo systemctl status httpd
+    sudo systemctl start httpd
     cd /var/www/html
     cat << EOL > /var/www/html/index.html
     <!DOCTYPE html>
