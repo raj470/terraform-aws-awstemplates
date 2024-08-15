@@ -10,3 +10,17 @@ resource "aws_instance" "ec2_terraform" {
 
 
 }
+
+locals {
+  instance_type = "t2.micro"
+  ami = "ami-0a1179631ec8933d7"
+  tag = "locals_provision"
+}
+
+resource "aws_instance" "ec2_locals" {
+  instance_type = "${local.instance_type}"
+  ami = "${local.ami}"
+  tags = {
+    Name = "${local.tag}-tag"
+  }
+}
