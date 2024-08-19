@@ -12,6 +12,7 @@ provider "aws" {
   shared_credentials_files = ["/Users/rajeshwarreddysirigada/.aws/credentials"]
 }
 
+#provisioning using terraform modules
 module "temp" {
   source  = "app.terraform.io/raj_aws/temp/aws"
   version = "0.0.3"
