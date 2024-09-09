@@ -7,20 +7,33 @@ resource "aws_instance" "ec2_terraform" {
   tags = {
     Name = "raj"
   }
-
-
-}
-
-locals {
-  instance_type = "t2.micro"
-  ami = "ami-0a1179631ec8933d7"
-  tag = "locals_provision"
-}
-
-resource "aws_instance" "ec2_locals" {
-  instance_type = "${local.instance_type}"
-  ami = "${local.ami}"
-  tags = {
-    Name = "${local.tag}-tag"
+  provisioner "file" { #file provisioning
+    source      = "/Users/rajeshwarreddysirigada/Desktop/git/awstemplates/EC2/index.html"
+    destination = "/home/ec2-user/index.html"
   }
+  connection {
+    type        = "ssh"
+    host        = self.public_ip
+    user        = "ec2-user"
+    private_key = aws_instance.ec2_aws.key_name
+    timeout     = "4m"
+  }
+
+
 }
+
+
+#Using locals
+# locals {
+#   instance_type = "t2.micro"
+#   ami = "ami-0a1179631ec8933d7"
+#   tag = "locals_provision"
+# }
+
+# resource "aws_instance" "ec2_locals" {
+#   instance_type = "${local.instance_type}"
+#   ami = "${local.ami}"
+#   tags = {
+#     Name = "${local.tag}-tag"
+#   }
+# }
