@@ -61,11 +61,15 @@ resource "aws_ecs_task_definition" "TD-cluster" {
       #   Timeout     = 30
       # }
       healthCheck = {
-        command     = ["CMD-SHELL", "curl -f http://localhost/ || exit 1"]
-        interval    = 30
-        retries     = 3
-        startPeriod = 20
-        timeout     = 30
+        command     = ["CMD-SHELL","curl -f http://localhost:8080/login || exit 1"]
+        interval: 30
+        timeout: 20
+        retries: 4
+        startPeriod: 30
+        # interval    = 40
+        # retries     = 3
+        # startPeriod = 30
+        # timeout     = 20
       }
       logConfiguration = {
         logDriver = "awslogs"
@@ -97,7 +101,7 @@ resource "aws_ecs_task_definition" "TD-cluster" {
 
 # Task Log group
 resource "aws_cloudwatch_log_group" "logs_group" {
-  name = "/ecs/"
+  name = "/ecs/jenkins-lts/"
 }
 #Service creation
 resource "aws_ecs_service" "tf_service" {
@@ -115,6 +119,7 @@ resource "aws_ecs_service" "tf_service" {
   deployment_minimum_healthy_percent = 100
   network_configuration {
     security_groups = ["sg-06dce10db069bee9d"]
+    assign_public_ip = true
     subnets         = ["subnet-02075efeb8ebfe991", "subnet-04287cde12f035e08", "subnet-01ed866330e76671e", "subnet-04df54f17d3907e9b"]
   }
 }
