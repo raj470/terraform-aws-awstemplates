@@ -53,23 +53,12 @@ resource "aws_ecs_task_definition" "TD-cluster" {
         name = "containerport"
         appprotocol  = "http"
       }]
-      # HealthCheck = {
-      #   command     = ["CMD-SHELL", "curl -f http://localhost/ || exit 1"]
-      #   Interval    = 30
-      #   Retries     = 3
-      #   StartPeriod = 20
-      #   Timeout     = 30
-      # }
       healthCheck = {
         command     = ["CMD-SHELL","curl -f http://localhost:8080/login || exit 1"]
         interval: 30
         timeout: 20
         retries: 4
         startPeriod: 30
-        # interval    = 40
-        # retries     = 3
-        # startPeriod = 30
-        # timeout     = 20
       }
       logConfiguration = {
         logDriver = "awslogs"
@@ -94,11 +83,6 @@ resource "aws_ecs_task_definition" "TD-cluster" {
   }
   execution_role_arn = "arn:aws:iam::058264186519:role/ecsTaskExecutionRole"
 }
-#IAM role for task execution
-# resource "aws_ecs_capacity_provider" "capacity-provider" {
-
-# }
-
 # Task Log group
 resource "aws_cloudwatch_log_group" "logs_group" {
   name = "/ecs/jenkins-lts/"
@@ -152,25 +136,6 @@ resource "aws_appautoscaling_policy" "fargate_scaling_policy" {
     scale_out_cooldown = 60
   }
 }
-
-
-
-#capacity provider 
-# resource "aws_ecs_capacity_provider" "test-cp" {
-#   name = "clustercp"
-#   depends_on = [ aws_appautoscaling_target.fargate_scaling_target ]
-#   auto_scaling_group_provider {
-#     auto_scaling_group_arn = aws_appautoscaling_target.fargate_scaling_target.arn
-#     managed_draining = "ENABLED"
-#     managed_scaling {
-#       maximum_scaling_step_size = 10
-#       minimum_scaling_step_size = 1
-#       status = "ENABLED"
-#       target_capacity = 65
-#     }
-#   }
-# }
-
 #capacity provider association
 resource "aws_ecs_cluster_capacity_providers" "ecs-cp-asg" {
   cluster_name       = aws_ecs_cluster.App_ecs.name
@@ -181,169 +146,3 @@ resource "aws_ecs_cluster_capacity_providers" "ecs-cp-asg" {
   #   capacity_provider = "FARGATE"
   # }
 }
-
-# resource "aws_autoscaling_group" "ASG_prov" {
-#   availability_zones = var.availability_zone[1]
-#   max_size = 8
-#   min_size = 2
-#   health_check_grace_period = 60
-#   health_check_type = "ELB"
-#   instance_maintenance_policy {
-#     max_healthy_percentage = 200
-#     min_healthy_percentage = 100
-#   }
-#   desired_capacity = 3
-#   desired_capacity_type = "units"
-#   name = "ASG-tf-prov"
-#   tag {
-#     key = var.multiple_tags.ASG-tag
-#     value = var.multiple_tags.ASG-tag
-#     propagate_at_launch = true
-#   }
-# }
-
-
-
-#   backend "remote" {
-#     hostname     = "app.terraform.io"
-#     organization = "raj_aws"
-
-#     workspaces {
-#       prefix =  "dev"
-#     }
-#   }
-
-# #######
-# # variables.tf
-
-# variable "private_subnet_names" {
-#   type    = list(string)
-#   default = ["private_subnet_a", "private_subnet_b", "private_subnet_c"]
-# }
-# variable "vpc_cidr" {
-#   type    = string
-#   default = "10.0.0.0/16"
-# }
-# variable "public_subnet_names" {
-#   type    = list(string)
-#   default = ["public_subnet_1", "public_subnet_2"]
-# }
-# # main.tf
-
-# resource "aws_subnet" "private_subnet" {
-#   count             = length(var.private_subnet_names)
-#   vpc_id            = aws_vpc.vpc.id
-#   cidr_block        = cidrsubnet(var.vpc_cidr, 8, count.index)
-#   availability_zone = data.aws_availability_zones.available.names[count.index]
-
-#   tags = {
-#     Name      = var.private_subnet_names[count.index]
-#     Terraform = "true"
-#   }
-# }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# [/var/lib/docker/containers/]
-# datetime_format = %b %d %H:%M:%S
-# file = /var/lib/docker/containers/*/container-cached.log
-# buffer_duration = 2000
-# initial_position = start_of_file
-# log_group_name = /var/ib/docker
-# -- INSERT --                       
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# resource "aws_instance" "container-logs" {
-#   ami                    = var.ami
-#   tags                   = var.tags
-#   instance_type          = var.instance_type
-#   vpc_security_group_ids = var.vpc_security_group_ids
-#   availability_zone      = var.availability_zone[1]
-#   key_name               = var.key_name
-#   user_data = data.template_cloudinit_config.config-files.rendered#base64decode(filebase64("${path.cwd}")/docker_logs.tf))
-# }
-
-# resource "template_dir" "path-to-files" {
-#   source_dir = "${data.template_cloudinit_config.config-files.rendered}"
-#   destination_dir = "${path.root}/var/www/html/"
-# }
-
-# data "template_cloudinit_config" "config-files" {
-#   base64_encode = false
-#   gzip = false
-
-#   part {
-#     # filename = "DockerFile"
-#     # content_type = "dockerfile/config"
-#     content = templatefile("${path.cwd}/DockerFile", {})
-#   }
-#   part {
-#     filename = "apache.sh"
-#     content_type = "Apache/install"
-#     content = templatefile("${path.cwd}/apache.sh", {})
-#   }
-#   part {
-#     filename = "index.html"
-#     content_type = "indexfile"
-#     content = templatefile("${path.cwd}/index.html",{})
-#   }
-# #   template = "${file("${path.module}/DockerFile")}" #file("${path.module}/cloudwatchlogs/DockerFile.tpl")
-# }
-
-# data "template_file" "docker-log" {
-#   template = "${file("${path.module}/DockerFile")}"
-# }
-
-
-# output "rendered-output" {
-#   value = data.template_cloudinit_config.config-files.rendered#base64decode(filebase64(data.template_cloudinit_config.config-files.rendered))
-# }
