@@ -1,0 +1,14 @@
+inputSet:
+  name: Build_raj470_terraform_aws_awstemplates_1727959695244-pr-trigger-input-set
+  identifier: Build_raj470_terraform_aws_awstemplates_1727959695244prtriggerinputset
+  orgIdentifier: default
+  projectIdentifier: dev
+  pipeline:
+    identifier: Build_raj470_terraform_aws_awstemplates_1727959695244
+    properties:
+      ci:
+        codebase:
+          build:
+            type: PR
+            spec:
+              number: <+trigger.prNumber>
