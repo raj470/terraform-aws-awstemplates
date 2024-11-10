@@ -1,0 +1,14 @@
+inputSet:
+  name: Build_raj470_terraform_aws_awstemplates_1727959695244-push-trigger-input-set
+  identifier: Build_raj470_terraform_aws_awstemplates_1727959695244pushtriggerinputset
+  orgIdentifier: default
+  projectIdentifier: dev
+  pipeline:
+    identifier: Build_raj470_terraform_aws_awstemplates_1727959695244
+    properties:
+      ci:
+        codebase:
+          build:
+            type: branch
+            spec:
+              branch: <+trigger.branch>
