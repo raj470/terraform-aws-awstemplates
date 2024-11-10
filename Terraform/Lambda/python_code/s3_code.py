@@ -1,6 +1,6 @@
 import json
 import boto3
-import datetime
+from datetime import datetime, timedelta, timezone
 def get_last_modified(object):
     return int(object['LastModified'].strftime('%s'))
 def lambda_handler(event, context):
@@ -9,6 +9,7 @@ def lambda_handler(event, context):
     for bucket in list_bucket['Buckets']:
         print(bucket['Name'])
     list_objects = S3.list_objects_v2(Bucket='bucket123cross')
+    utc_minus_4 = timezone(timedelta(hours=-4))
     # for object in list_objects['Contents']:
     #     print(object['Key'])
     last_modified = S3.list_objects_v2(Bucket='bucket123cross')
@@ -16,4 +17,4 @@ def lambda_handler(event, context):
     #     print(object['LastModified'])
     if 'Contents' in last_modified:
         for object in last_modified['Contents']:
-            print(bucket['Name']+" "+object['Key'] + " " + str(object['LastModified']))
+            print(bucket['Name']+" "+object['Key'] + " " + object['LastModified'].astimezone(utc_minus_4).strftime('%Y-%m-%d %H:%M:%S %Z'))
