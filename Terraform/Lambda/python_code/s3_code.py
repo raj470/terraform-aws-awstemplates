@@ -5,9 +5,10 @@ def lambda_handler(event, context):
     S3 = boto3.client('s3')
     list_bucket = S3.list_buckets()
     bucket_name = "bucket123cross"
+    list_objects = S3.list_objects_v2(Bucket=bucket_name)
     utc_minus_4 = timezone(timedelta(hours=-4))
-    if 'Contents' in last_modified:
-        for object in last_modified['Contents']:
+    if 'Contents' in list_objects:
+        for object in list_objects['Contents']:
             last_modified = object['LastModified'].astimezone(utc_minus_4)
             folder_name = last_modified.strftime("%Y-%m-%d %H:%M:%S %Z")
             new_key = f"{folder_name}/{object['Key'].split('/')[-1]}"  

@@ -10,6 +10,7 @@ resource "aws_lambda_function" "s3_lambda_trigger" {
   runtime       = "python3.12"
   handler       = "s3_code.lambda_handler"
   filename      = "${path.module}/python_code/s3_code.zip"
+  timeout       = 10
 }
 
 data "archive_file" "zip_code" {
