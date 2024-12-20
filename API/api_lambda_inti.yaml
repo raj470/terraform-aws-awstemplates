@@ -1,0 +1,135 @@
+AWSTemplateFormatVersion: 2010-09-09
+Parameters:
+  APIName:
+    Type: String
+    Default: "Testing"
+    Description: "Creating an API for lambda intergration testing"
+Resources:
+  API:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Ref APIName
+      Description: !Ref APIName
+      EndpointConfiguration:
+        Types: 
+          - "REGIONAL"
+  APIMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref API 
+      ResourceId: !GetAtt API.RootResourceId
+      HttpMethod: "GET"
+      AuthorizationType: NONE
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: "true"
+      #       #method.response.header.number2: true
+      #     ResponseModels:
+      #       application/json: 'Empty'
+      Integration:
+        Type: AWS
+        Uri: !Sub "arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2024-12-19/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${DynamoDBLambda}/invocations"
+          #- lambdaArn: !GetAtt "DynamoDBLambda.Arn"
+        IntegrationHttpMethod: GET
+        IntegrationResponses:
+          - StatusCode: 400
+            ResponseTemplates:
+              application/json: |
+                {
+                  "number1": "$input.params('number1')",
+                  "number2": "$input.params('number2')"
+                }
+            ResponseParameters:
+        #       #method.response.header.Access-Control-Allow-Origin: "true"
+                "method.response.header.number1": "integration.response.header.number1"
+                "method.response.header.number2": "integration.response.header.number2"
+      OperationName: "Dev_testing"
+      RequestValidatorId: !Ref RequestValidatorAPI
+  RequestValidatorAPI:
+    Type: AWS::ApiGateway::RequestValidator
+    Properties:
+      Name: "Intergration_request_validator"
+      RestApiId: !Ref API
+      ValidateRequestBody: true
+      ValidateRequestParameters: true
+  APIModelRequest:
+    Type: AWS::ApiGateway::Model
+    Properties:
+      RestApiId: !Ref API
+      ContentType: application/json
+  DynamoDBLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: "DynamoDBLambda"
+      PackageType: Zip
+      Handler: index.lambda_handler
+      Code:
+        ZipFile: |
+          import json
+          import uuid
+          import boto3
+          import logging
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+          dynamodb = boto3.resource('dynamodb')
+          table = dynamodb.Table('lambda_table')
+          def lambda_handler(event, context):
+            try:
+              number1 = event.get('number1')
+              number2 = event.get('number2')
+              if number1 is None or number2 is None:
+                raise ValueError("Both number1 and number2 must be provided.")
+              sum_result = number1 + number2  
+              transaction_id = str(uuid.uuid4())
+              logger.info(f"Number 1: {number1}")
+              logger.info(f"Number 2: {number2}")
+              logger.info(f"Sum: {sum_result}")
+              logger.info(f"Transaction ID: {transaction_id}")
+              table.put_item(
+                Item={
+                  'TransactionId': transaction_id,
+                  'Number1': number1,
+                  'Number2': number2,
+                  'Sum': sum_result
+                }
+              )
+              return {
+                'statusCode': 200,
+                'body': json.dumps('Transaction recorded successfully!')
+              }
+            except Exception as e:
+                logger.error(f"Error: {str(e)}")
+                return {
+                  'statusCode': 500,
+                  'body': json.dumps(f"Error: {str(e)}")
+                }
+      Role: !GetAtt LambdaFunctionExecutionRole.Arn
+      Architectures:
+        - x86_64
+      Runtime: python3.12
+      Timeout: 10
+      LoggingConfig:
+        ApplicationLogLevel: TRACE
+        LogFormat: JSON
+        LogGroup: DynamoDBlambda_logs
+        SystemLogLevel: DEBUG
+  LambdaFunctionExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaKinesisExecutionRole
+        - arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaSQSQueueExecutionRole
+        - arn:aws:iam::aws:policy/AmazonKinesisAnalyticsFullAccess
+        - arn:aws:iam::aws:policy/AmazonAPIGatewayInvokeFullAccess
+        - arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess
