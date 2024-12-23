@@ -18,34 +18,69 @@ Resources:
     Properties:
       RestApiId: !Ref API 
       ResourceId: !GetAtt API.RootResourceId
-      HttpMethod: "GET"
+      HttpMethod: POST
       AuthorizationType: NONE
       MethodResponses:
         - StatusCode: 200
           ResponseParameters:
-            method.response.header.Access-Control-Allow-Origin: "true"
-      #       #method.response.header.number2: true
+            # method.response.header.Access-Control-Allow-Origin: "true"
+            method.response.header.number1: true
+            method.response.header.number2: true
       #     ResponseModels:
       #       application/json: 'Empty'
+      # RequestParameters:
+      #   method.request.header.number1: true
+      #   method.request.header.number2: true
       Integration:
         Type: AWS
-        Uri: !Sub "arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2024-12-19/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${DynamoDBLambda}/invocations"
-          #- lambdaArn: !GetAtt "DynamoDBLambda.Arn"
-        IntegrationHttpMethod: GET
+        Uri: !Sub "arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${DynamoDBLambda}/invocations"
+        IntegrationHttpMethod: POST
+        Credentials: !GetAtt APIGatewayIAMRole.Arn
+        # RequestParameters:
+        #   "integration.response.header.number1": "method.response.header.number1"
+        #   "integration.response.header.number2": "method.response.header.number2"
         IntegrationResponses:
-          - StatusCode: 400
-            ResponseTemplates:
-              application/json: |
-                {
-                  "number1": "$input.params('number1')",
-                  "number2": "$input.params('number2')"
-                }
-            ResponseParameters:
-        #       #method.response.header.Access-Control-Allow-Origin: "true"
-                "method.response.header.number1": "integration.response.header.number1"
-                "method.response.header.number2": "integration.response.header.number2"
+          - StatusCode: 200
+            # ResponseTemplates:
+            #   application/json: |
+            #     {
+            #       "number1": "$input.params('number1')",
+            #       "number2": "$input.params('number2')"
+            #     }
+        #     ResponseParameters:
+        # #       #method.response.header.Access-Control-Allow-Origin: "true"
+        #         "integration.response.header.number1": "method.response.header.number1"
+        #         "integration.response.header.number2": "method.response.header.number2"
       OperationName: "Dev_testing"
       RequestValidatorId: !Ref RequestValidatorAPI
+  #API Stage
+  RestAPIStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      RestApiId: !Ref API
+      # AccessLogSetting:
+      #   DestinationArn: !GetAtt LogGroup.Arn
+      DeploymentId: !Ref APIDeployment
+      StageName: 'Test'
+      MethodSettings:
+        - ResourcePath: /*
+          HttpMethod: '*'
+          MetricsEnabled: true
+          DataTraceEnabled: true
+          LoggingLevel: INFO
+  #API Gateway Deployment
+  APIDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - APIMethod
+    Properties:
+      RestApiId: !Ref API
+  #Log Group for API Logs
+  # LogGroup:
+  #   Type: AWS::Logs::LogGroup
+  #   Properties:
+  #     #RetentionInDays: 14
+  #     LogGroupName: !Sub /aws/apigateway/${APIName}
   RequestValidatorAPI:
     Type: AWS::ApiGateway::RequestValidator
     Properties:
@@ -76,8 +111,15 @@ Resources:
           table = dynamodb.Table('lambda_table')
           def lambda_handler(event, context):
             try:
+              logger.info(f"Event received: {json.dumps(event)}")
               number1 = event.get('number1')
               number2 = event.get('number2')
+              # number1 = int(num1)
+              # number2 = int(num2)
+              # logger.info(f"Number 1: {number1}")
+              # logger.info(f"Number 2: {number2}")
+              # number1 = int(number1) if number1 is not None else None
+              # number2 = int(number2) if number2 is not None else None
               if number1 is None or number2 is None:
                 raise ValueError("Both number1 and number2 must be provided.")
               sum_result = number1 + number2  
@@ -133,3 +175,31 @@ Resources:
         - arn:aws:iam::aws:policy/AmazonKinesisAnalyticsFullAccess
         - arn:aws:iam::aws:policy/AmazonAPIGatewayInvokeFullAccess
         - arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess
+  APIGatewayIAMRole:
+    Type: AWS::IAM::Role
+    Properties:
+      # PolicyName: 
+      RoleName: "API_Lambda_Invoke"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+                - apigateway.amazonaws.com
+  APIPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: 'Allow'
+            Action: 
+              - 'lambda:*'
+            Resource: "*"
+      PolicyName: "APIInvokeLambda"
+      Roles:
+        - !Ref APIGatewayIAMRole
